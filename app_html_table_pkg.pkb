@@ -43,7 +43,7 @@ q'!table {
     border-collapse: collapse;
 }
 caption {
-    font-weight: bold;
+    font-style: italic;
     font-size: larger;
     margin-bottom: 0.5em;
 }
