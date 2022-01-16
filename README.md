@@ -184,6 +184,9 @@ Pretty fancy! But given that you have the default CSS code from the package
 plus this example, it is not that
 much of a stretch to make your table look the way you want.
 
+In fact I think it would be a fine idea for you to tweak the default CSS in the package
+for your organization.
+
 ```sql
 SELECT app_html_table_pkg.query2html(p_sql => q'[
         SELECT TO_CHAR(employee_id, '099999') AS "Emp ID", last_name||', '||first_name AS "Full Name", hire_date AS "Date,Hire", TO_CHAR(salary,'$999,999.99') AS "Salary"
