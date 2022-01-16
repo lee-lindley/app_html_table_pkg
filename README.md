@@ -125,6 +125,15 @@ elements in the local style where \_\_colnum\_\_ is the column number.
 
 If provided, will be wrapped with \<caption\> \</caption\> and inserted following the \<table\> tag.
 
+### p_css_scoped_style
+
+Do not include the \<style\> \</style\> elements as the function will add those. Everything else
+that the function provides by default you are responsible for.
+
+You will notice I've stayed away from specifying actual fonts. Religious wars are started by mentioning
+a preference. This just lets the client set the font other than tweaks we do for style, weight and relative
+size. That said, I can make a case for a mono-spaced fault for tables; however, I recognize that as a programmer
+my font preferences are shaped by what I do and I'm in the minority.
 
 ## cursor2html
 
@@ -215,3 +224,8 @@ FROM dual;
 |:--:|
 | Example 1 Fancy Shenanigans |
 
+The function changed '\_x0020\_' to spaces in the column headers, thus dealing with one common problem
+of using DBMS_XMLGEN, but we did not try to fix the issue of having a comma in your column alias. Other non-alpha characters
+could be encoded as well. You are on your own for that.
+
+Overall this is a pretty fancy result for a bit of copy/pasting and tweaking of the provided style.
