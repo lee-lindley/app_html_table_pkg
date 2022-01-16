@@ -82,10 +82,38 @@ in your cursor/query/view, you must cast them to DATE for it to work.
 
     FUNCTION get_clob(
         p_src                           SYS_REFCURSOR
+        ,p_caption                      VARCHAR2 := NULL
+        ,p_css_scoped_style             VARCHAR2 := NULL
     ) RETURN CLOB
     ;
+
+/* default p_css_scoped_style is
+
+table {
+    border: 1px solid black; 
+    border-spacing: 0; 
+    border-collapse: collapse;
+}
+caption {
+    font-weight: bold;
+    font-size: larger;
+    margin-bottom: 0.5em;
+}
+th {
+    text-align:left;
+}
+th, td {
+    border: 1px solid black; 
+    padding:4px 6px;
+}
+
+but the package adds tr > td:nth-of-type(_col_) { text-align:right; }
+as needed
+*/
     FUNCTION get_clob(
         p_sql                           CLOB
+        ,p_caption                      VARCHAR2 := NULL
+        ,p_css_scoped_style             VARCHAR2 := NULL
         ,p_num_format                   VARCHAR2 := NULL
         ,p_date_format                  VARCHAR2 := NULL
         ,p_interval_format              VARCHAR2 := NULL

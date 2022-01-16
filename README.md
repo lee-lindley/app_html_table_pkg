@@ -12,9 +12,10 @@ If you have those in your cursor/query/view, you must cast them to DATE for it t
 at the bottom of this document.
 
 The package has two overloaded versions of a Function named *get_clob*, plus
-a Polymorphic Table Function named *ptf*; however, you are unlikely to call *ptf* directly
+a Polymorphic Table Function named *ptf*; however, you are unlikely to call *ptf* separately
 as the rows it produces need to be wrapped in more HTML. The *get_clob* functions perform
-that wrapping and accumulate the rows. You will need to craft the *ptf* call if you use the SYS_REFCURSOR
+that wrapping and accumulate the rows. You will need to craft the *ptf* call as part of your
+query if you use the SYS_REFCURSOR
 overload version of *get_clob*.
 
 # Content
@@ -56,12 +57,22 @@ Once you complete any changes to *install.sql*, run it with sqlplus:
 # Use Case
 
 Our use case is to present HTML Table markup from an Oracle query while right aligning numeric data in the cells.
-This is not a full HTML document, but a section that you can include in a larger HTML body.
+This is not a full HTML document, but a section that you can include in a larger HTML body. For example:
+
+    SELECT app_html_table_pkg.get_clob(q'!SELECT * FROM hr.departments!')
+    FROM dual;
+
+The resulting text is enclosed with a \<div\> tag and can be added to an HTML email or otherwise included
+in an HTML document.
+
+While here, it turned out to be not so difficult to provide a way for you to insert your own
+style choices for the table via CSS. You do not need to be a CSS guru to do it. The pattern
+from the examples will be enough for most.
 
 The common method for generating HTML markup tables from SQL queries in Oracle
-is to use DBMS_XMLGEN and XSLT style sheet conversion via XMLType. A search of the web will
+is to use DBMS_XMLGEN and XSLT conversions via XMLType. A search of the web will
 turn up multiple demonstrations of the technique. It works reasonably well, but there are
-some gotchas like column headers with spaces get munged to _x0020_ and all data is left justified
+some gotchas like column headers with spaces get munged to \_x0020\_ and all data is left justified
 in the cells.
 
 A big drawback is that we often want to right justify numeric data. In plain text output we can use LPAD(TO_CHAR... 
@@ -90,6 +101,8 @@ So, here we are.
 ```sql
     FUNCTION get_clob(
         p_sql                           CLOB
+        ,p_caption                      VARCHAR2 := NULL
+        ,p_css_scoped_style             VARCHAR2 := NULL
         ,p_num_format                   VARCHAR2 := NULL
         ,p_date_format                  VARCHAR2 := NULL
         ,p_interval_format              VARCHAR2 := NULL
@@ -101,8 +114,9 @@ So, here we are.
 
 This version of *get_clob* with the *p_sql* parameter is the one you will most likely use. The alternative version
 takes a SYS_REFCURSOR parameter which would allow you to use bind variables, but to use it
-you must select from the *ptf* function directly in your cursor query. The returned CLOB looks as follows,
-however the two style elements below with **text-aline:right;** are customized specificly for a particular
+you must select from the *ptf* function directly in your cursor query. The returned CLOB using the default
+scoped style and no caption looks as follows,
+however the two style elements below with "**text-align:right;**" are customized specificly for a particular
 query and parameters.
 
 
@@ -113,6 +127,11 @@ query and parameters.
 	    border-spacing: 0;
 	    border-collapse: collapse;
 	}
+    caption {
+        font-weight: bold;
+        font-size: larger;
+        margin-bottom: 0.5em;
+    }
 	th, td {
 	    border: 1px solid black;
 	    padding:4px 6px;
@@ -130,33 +149,44 @@ query and parameters.
     ...
 	</table></div>
 
-- p_sql
-    - A string containing the SQL statement to execute.
+### p_sql
 
-- p_num_format
-    - The default Number format to be applied via *TO_CHAR* to any NUMBER datatype columns in your resultset. See *p_col_conv_tab* for a way to apply different format conversions to different columns. Note that you can use TO_CHAR directly in your query, but the results will not be right justified in the cell unless you also populate *p_right_justify_tab*.
+A string containing the SQL statement to execute.
 
-- p_date_format
-    - The default Date format to be applied via *TO_CHAR* to any DATE datatype columns in your resultset. See *p_col_conv_tab* for a way to apply different format conversions to different columns. Note that you can use TO_CHAR directly in your query.
+### p_caption
 
-- p_interval_format
-    - The default interval format to be applied via *TO_CHAR* to any INTERVAL datatype columns in your resultset. See *p_col_conv_tab* for a way to apply different format conversions to different columns. Note that you can use TO_CHAR directly in your query.
+If provided, will be wrapped with \<caption\> \</caption\> and inserted following the \<table\> tag.
 
-- p_col_conv_tab
-    - A nested table collection of *TO_CHAR* conversion formats. This lets you override the default conversion for a particular column of type NUMBER, DATE or INTERVAL. 
-    The collection cannot be sparse, but may contain less entries than the query has columns.
-    See the examples for ways to initiate this collection as part of the function call.
+### p_num_format
 
-- p_right_justify_tab
-    - The default HTML table data cell is left justified. *app_html_table_pkg* will automatically apply **style="text-align:right;"** to cells where the original column type in your resultset is NUMBER. Note that if you run TO_CHAR in your query, the type of that column is VARCHAR2, which is a reason you might want to let *app_html_table_pkg* apply the conversions. *p_right_justify_tab* allows you to override the default behavior for any given column. A value of 'R' will right justify, 'L' will left justify (even if it is a number) and NULL will let the program decide based on the datatype. 
-    The collection cannot be sparse, but may contain less entries than the query has columns.
-    See the examples for ways to initiate this collection as part of the function call.
+The default Number format to be applied via *TO_CHAR* to any NUMBER datatype columns in your resultset. See *p_col_conv_tab* for a way to apply different format conversions to different columns. Note that you can use TO_CHAR directly in your query, but the results will not be right justified in the cell unless you also populate *p_right_justify_tab*.
+
+### p_date_format
+
+The default Date format to be applied via *TO_CHAR* to any DATE datatype columns in your resultset. See *p_col_conv_tab* for a way to apply different format conversions to different columns. Note that you can use TO_CHAR directly in your query.
+
+### p_interval_format
+
+The default interval format to be applied via *TO_CHAR* to any INTERVAL datatype columns in your resultset. See *p_col_conv_tab* for a way to apply different format conversions to different columns. Note that you can use TO_CHAR directly in your query.
+
+### p_col_conv_tab
+
+A nested table collection of *TO_CHAR* conversion formats. This lets you override the default conversion for a particular column of type NUMBER, DATE or INTERVAL. 
+The collection cannot be sparse, but may contain less entries than the query has columns.
+See the examples for ways to initiate this collection as part of the function call.
+
+### p_right_justify_tab
+The default HTML table data cell is left justified. *app_html_table_pkg* will automatically apply **style="text-align:right;"** to cells where the original column type in your resultset is NUMBER. Note that if you run TO_CHAR in your query, the type of that column is VARCHAR2, which is a reason you might want to let *app_html_table_pkg* apply the conversions. *p_right_justify_tab* allows you to override the default behavior for any given column. A value of 'R' will right justify, 'L' will left justify (even if it is a number) and NULL will let the program decide based on the datatype. 
+The collection cannot be sparse, but may contain less entries than the query has columns.
+See the examples for ways to initiate this collection as part of the function call.
 
 ## get_clob SYS_REFCURSOR overload
 
 ```sql
     FUNCTION get_clob(
         p_src                           SYS_REFCURSOR
+        ,p_caption                      VARCHAR2 := NULL
+        ,p_css_scoped_style             VARCHAR2 := NULL
     ) RETURN CLOB
     ;
 ```
@@ -191,10 +221,15 @@ that were discussed for the SQL string version of *get* are passed to *ptf*. Exa
         POLYMORPHIC USING app_html_table_pkg
     ;
 ```
-Except for the first argument, the others are the same as the first *get* Function shown above.
+Except for the first argument, the others are the same as the first *get* Function shown above. *ptf* parameters
+may not be bind variables. The reason is that PTFs are evaluated at hard parse time so bind values
+are not available and will present as all NULL. You can use bind variables in the rest of your query
+assuming you are passing a CTE (WITH clause name) as *p_tab*.
 
-- p_tab
-    - Name of a schema level Table, View or Materialized View, or more likey, a Common Table Expression (CTE) (aka WITH clause).
+### p_tab
+
+Name of a schema level Table, View or Materialized View, or more likey, a Common Table Expression (CTE) (aka WITH clause).
+
 ## get_ptf_query_string
 
 ```sql
@@ -259,7 +294,7 @@ SELECT app_html_table_pkg.get_clob(p_sql => q'[
 FROM dual;
 ```
 
-For this example I am including all of the HTML code but trimming out most of the rows from the resultset. You
+For this example we include all of the HTML code but trim out most of the data rows from the resultset. You
 can see how the table data is wrapped with a **div** and an embedded scoped CSS style 
 that has two special overrides for TD tags in columns 1 and 4. We can add more options for the style,
 such as perhaps colors and fonts, but I'm not an HTML/CSS guy, so it is slow going. If you would like

@@ -24,7 +24,17 @@ SOFTWARE.
 */
 
     TYPE t_tab_justify IS TABLE OF VARCHAR2(1) INDEX BY BINARY_INTEGER;
-    g_tab_justify   t_tab_justify;
+    g_tab_justify       t_tab_justify;
+
+    -- If the user does not want to change the NLS formats for the session
+    -- but has custom coversions for this query, then we will apply them using TO_CHAR
+    TYPE t_conv_fmt IS RECORD(
+        t               BINARY_INTEGER  -- type
+        ,f              VARCHAR2(1024)  -- to_char fmt string
+    );
+    TYPE t_tab_conv_fmt IS TABLE OF t_conv_fmt INDEX BY BINARY_INTEGER;
+    g_conv_fmts         t_tab_conv_fmt;
+
 
     FUNCTION get_ptf_query_string(
         p_sql                           CLOB
@@ -86,27 +96,47 @@ SOFTWARE.
     ;
 
     FUNCTION get_clob(
-        p_src               SYS_REFCURSOR
+        p_src                   SYS_REFCURSOR
+        ,p_caption              VARCHAR2 := NULL
+        ,p_css_scoped_style     VARCHAR2 := NULL
     )
     RETURN CLOB
     IS
         v_tab_varchar2  DBMS_TF.tab_varchar2_t;
         v_clob          CLOB;
-    BEGIN
-
-        -- We separate out table from the rest of the body with a div and embed a scoped style for it
-        v_clob := q'!<div id="plsql-table">
-<style type="text/css" scoped>
+        v_css_style     CLOB := NVL(p_css_scoped_style, q'!
 table {
     border: 1px solid black; 
     border-spacing: 0; 
     border-collapse: collapse;
 }
+caption {
+    font-weight: bold;
+    font-size: larger;
+    margin-bottom: 0.5em;
+}
+th {
+    text-align:left;
+}
 th, td {
     border: 1px solid black; 
     padding:4px 6px;
 }
-!';
+!');
+    BEGIN
+        -- we need first fetch to populate pacakge global variables
+        FETCH p_src BULK COLLECT INTO v_tab_varchar2 LIMIT 100;
+        IF v_tab_varchar2.COUNT = 0 THEN
+            -- nary even a header row
+            RETURN NULL;
+        END IF;
+
+        -- We separate out table from the rest of the body with a div and embed a scoped style for it
+        v_clob := q'!<div id="plsql-table">
+<style type="text/css" scoped>
+!'
+            ||v_css_style
+            ;
 
         -- each of the columns that were either asked to be right justified via the p_right_justify_tab            
         -- parameter or were not overriden by it and found to be NUMBER data types, we right justify
@@ -122,18 +152,24 @@ th, td {
 ';
             END IF;
         END LOOP;
+
         v_clob := v_clob||'</style>
 <table>
 ';
+        IF p_caption IS NOT NULL THEN
+            v_clob := v_clob||'<caption>'||DBMS_XMLGEN.CONVERT(p_caption)||'</caption>
+'; 
+        END IF;
 
         -- now fetch the HTML <tr> rows from the PTF
         LOOP
-            FETCH p_src BULK COLLECT INTO v_tab_varchar2 LIMIT 100;
-            EXIT WHEN v_tab_varchar2.COUNT = 0;
+            -- we already called fetch once at beginning of procedure and checked for count=0
             FOR i IN 1..v_tab_varchar2.COUNT
             LOOP
                 v_clob := v_clob||v_tab_varchar2(i)||CHR(10);
             END LOOP;
+            FETCH p_src BULK COLLECT INTO v_tab_varchar2 LIMIT 100;
+            EXIT WHEN v_tab_varchar2.COUNT = 0;
         END LOOP;
         v_clob := v_clob||'</table></div>';
 
@@ -143,6 +179,8 @@ th, td {
 
     FUNCTION get_clob(
         p_sql                   CLOB
+        ,p_caption              VARCHAR2 := NULL
+        ,p_css_scoped_style     VARCHAR2 := NULL
         ,p_num_format           VARCHAR2 := NULL
         ,p_date_format          VARCHAR2 := NULL
         ,p_interval_format      VARCHAR2 := NULL
@@ -192,13 +230,33 @@ th, td {
                 RAISE;
         END;
 
-        v_clob := get_clob(v_src);
+        v_clob := get_clob(v_src, p_caption, p_css_scoped_style);
         BEGIN
             CLOSE v_src;
             EXCEPTION WHEN invalid_cursor THEN NULL;
         END;
         RETURN v_clob;
     END;
+
+    -- private procedure called at first fetch
+    PROCEDURE populate_g_tab_justify(
+        p_env                   DBMS_TF.env_t
+        ,p_right_justify_tab    &&d_arr_varchar2_udt.
+    ) IS
+    BEGIN
+        g_tab_justify.DELETE;
+        FOR i IN 1..p_env.get_columns.COUNT()
+        LOOP
+            g_tab_justify(i) := CASE WHEN p_right_justify_tab IS NOT NULL AND p_right_justify_tab.COUNT >= i
+                                            AND p_right_justify_tab(i) IN ('R','r','L','l')
+                                        THEN UPPER(p_right_justify_tab(i))
+                                     WHEN p_env.get_columns(i).type = DBMS_TF.type_number 
+                                        THEN 'R' 
+                                     ELSE 'L' 
+                                END;
+        END LOOP;
+    END populate_g_tab_justify
+    ;
 
     --
     -- The rest of this package body is the guts of the Polymorphic Table Function
@@ -217,20 +275,16 @@ th, td {
     AS
         v_new_cols              DBMS_TF.columns_new_t;
     BEGIN
-        -- communicate with get_clob through the package global variable
-        g_tab_justify.DELETE;
+        --
+        -- cannot call populate_g_tab_justify here, because describe is not called if
+        -- our query was already parsed in this session or any other.
+        --
+
         -- stop all input columns from being in the output
         FOR i IN 1..p_tab.column.COUNT()
         LOOP
             p_tab.column(i).pass_through := FALSE;
             p_tab.column(i).for_read := TRUE;
-            g_tab_justify(i) := CASE WHEN p_right_justify_tab IS NOT NULL AND p_right_justify_tab.COUNT >= i
-                                            AND p_right_justify_tab(i) IN ('R','r','L','l')
-                                        THEN UPPER(p_right_justify_tab(i))
-                                     WHEN p_tab.column(i).description.type = DBMS_TF.type_number 
-                                        THEN 'R' 
-                                     ELSE 'L' 
-                                END;
         END LOOP;
         -- create a single new output column for the CSV row string
         v_new_cols(1) := DBMS_TF.column_metadata_t(
@@ -262,12 +316,6 @@ th, td {
         v_out_row_i         BINARY_INTEGER := 0;
         -- If the user does not want to change the NLS formats for the session
         -- but has custom coversions for this query, then we will apply them using TO_CHAR
-        TYPE t_conv_fmt IS RECORD(
-            t   BINARY_INTEGER  -- type
-            ,f  VARCHAR2(1024)  -- to_char fmt string
-        );
-        TYPE t_tab_conv_fmt IS TABLE OF t_conv_fmt INDEX BY BINARY_INTEGER;
-        v_conv_fmts         t_tab_conv_fmt;
         FUNCTION apply_cust_conv(
             p_col_index     BINARY_INTEGER
             ,p_row_index    BINARY_INTEGER
@@ -275,16 +323,16 @@ th, td {
         IS
             v_s VARCHAR2(4000);
         BEGIN
-            v_s := CASE WHEN v_conv_fmts.EXISTS(p_col_index) THEN
-                            CASE v_conv_fmts(p_col_index).t
+            v_s := CASE WHEN g_conv_fmts.EXISTS(p_col_index) THEN
+                            CASE g_conv_fmts(p_col_index).t
                                 WHEN DBMS_TF.type_number THEN 
-                                    LTRIM(TO_CHAR(v_rowset(p_col_index).tab_number(p_row_index), v_conv_fmts(p_col_index).f))
+                                    LTRIM(TO_CHAR(v_rowset(p_col_index).tab_number(p_row_index), g_conv_fmts(p_col_index).f))
                                 WHEN DBMS_TF.type_date THEN 
-                                    TO_CHAR(v_rowset(p_col_index).tab_date(p_row_index), v_conv_fmts(p_col_index).f)
+                                    TO_CHAR(v_rowset(p_col_index).tab_date(p_row_index), g_conv_fmts(p_col_index).f)
                                 WHEN DBMS_TF.type_interval_ym THEN 
-                                    TO_CHAR(v_rowset(p_col_index).tab_interval_ym(p_row_index), v_conv_fmts(p_col_index).f)
+                                    TO_CHAR(v_rowset(p_col_index).tab_interval_ym(p_row_index), g_conv_fmts(p_col_index).f)
                                 WHEN DBMS_TF.type_interval_ds THEN 
-                                    TO_CHAR(v_rowset(p_col_index).tab_interval_ds(p_row_index), v_conv_fmts(p_col_index).f)
+                                    TO_CHAR(v_rowset(p_col_index).tab_interval_ds(p_row_index), g_conv_fmts(p_col_index).f)
                                 ELSE DBMS_TF.col_to_char(v_rowset(p_col_index), p_row_index)
                             END
                     ELSE
@@ -310,27 +358,32 @@ th, td {
         -- get the data for this fetch 
         DBMS_TF.get_row_set(v_rowset, v_row_cnt, v_col_cnt);
 
-        -- set up for custom TO_CHAR conversions if requested for date and/or interval types
-        FOR i IN 1..v_col_cnt
-        LOOP
-            IF p_col_conv_tab IS NOT NULL AND p_col_conv_tab.COUNT >= i 
-                AND p_col_conv_tab(i) IS NOT NULL
-            THEN
-                v_conv_fmts(i) := t_conv_fmt(v_env.get_columns(i).type, p_col_conv_tab(i));
-            ELSIF p_date_format IS NOT NULL AND v_env.get_columns(i).type = DBMS_TF.type_date THEN
-                v_conv_fmts(i) := t_conv_fmt(DBMS_TF.type_date, p_date_format);
-            ELSIF p_num_format IS NOT NULL AND v_env.get_columns(i).type = DBMS_TF.type_number THEN
-                v_conv_fmts(i) := t_conv_fmt(DBMS_TF.type_number, p_num_format);
-            ELSIF p_interval_format IS NOT NULL 
-                AND v_env.get_columns(i).type IN (DBMS_TF.type_interval_ym, DBMS_TF.type_interval_ds) 
-            THEN
-                v_conv_fmts(i) := t_conv_fmt(v_env.get_columns(i).type, p_interval_format);
-            END IF;
-
-        END LOOP;
-
 --dbms_output.put_line('fetched v_row_cnt='||v_row_cnt||', v_col_cnt='||v_col_cnt);
         IF v_fetch_pass = 0 THEN -- this is first pass and we need header row
+
+            g_conv_fmts.DELETE;
+            -- set up for custom TO_CHAR conversions if requested for date and/or interval types
+            FOR i IN 1..v_col_cnt
+            LOOP
+                IF p_col_conv_tab IS NOT NULL AND p_col_conv_tab.COUNT >= i 
+                    AND p_col_conv_tab(i) IS NOT NULL
+                THEN
+                    g_conv_fmts(i) := t_conv_fmt(v_env.get_columns(i).type, p_col_conv_tab(i));
+                ELSIF p_date_format IS NOT NULL AND v_env.get_columns(i).type = DBMS_TF.type_date THEN
+                    g_conv_fmts(i) := t_conv_fmt(DBMS_TF.type_date, p_date_format);
+                ELSIF p_num_format IS NOT NULL AND v_env.get_columns(i).type = DBMS_TF.type_number THEN
+                    g_conv_fmts(i) := t_conv_fmt(DBMS_TF.type_number, p_num_format);
+                ELSIF p_interval_format IS NOT NULL 
+                    AND v_env.get_columns(i).type IN (DBMS_TF.type_interval_ym, DBMS_TF.type_interval_ds) 
+                THEN
+                    g_conv_fmts(i) := t_conv_fmt(v_env.get_columns(i).type, p_interval_format);
+                END IF;
+    
+            END LOOP;
+    
+            -- put decision on column justification into package global
+            populate_g_tab_justify(v_env, p_right_justify_tab);
+
             -- the first row of our output will get a header row plus the data row
             v_repfac(1) := 2;
             -- the rest of the rows will be 1 to 1 on the replication factor
