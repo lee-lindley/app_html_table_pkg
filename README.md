@@ -1,22 +1,8 @@
 # app_html_table_pkg
 
-Create HTML Table markup from an Oracle query.
-
-> NOTE: Requires Oracle version 18c or higher as it depends on a Polymorphic Table Function. 
-
-> ADDENDUM: There is a substantial limitation of Polymorphic Table Functions at least as of 19.6 and 20.3 (may
-have been addressed in later releases).  Only SCALAR
-values are allowed for columns, which sounds innocuous enough, until you understand that
-SYSDATE and TO_DATE('20210101','YYYYMMDD') do not fit that definition for reasons I cannot fathom.
-If you have those in your cursor/query/view, you must cast them to DATE for it to work. More detail follows
-at the bottom of this document.
-
-The package has two overloaded versions of a Function named *get_clob*, plus
-a Polymorphic Table Function named *ptf*; however, you are unlikely to call *ptf* separately
-as the rows it produces need to be wrapped in more HTML. The *get_clob* functions perform
-that wrapping and accumulate the rows. You will need to craft the *ptf* call as part of your
-query if you use the SYS_REFCURSOR
-overload version of *get_clob*.
+Create HTML Table markup from an Oracle query string or SYS_REFCURSOR. Allow for right justifying
+selected columns, an optional table caption, and your own local scoped CSS style for the table and
+table elements.
 
 # Content
 
@@ -62,7 +48,7 @@ This is not a full HTML document, but a section that you can include in a larger
     SELECT app_html_table_pkg.get_clob(q'!SELECT * FROM hr.departments!')
     FROM dual;
 
-The resulting text is enclosed with a \<div\> tag and can be added to an HTML email or otherwise included
+The resulting markup text is enclosed with a \<div\> tag and can be added to an HTML email or otherwise included
 in an HTML document.
 
 While here, it turned out to be not so difficult to provide a way for you to insert your own
