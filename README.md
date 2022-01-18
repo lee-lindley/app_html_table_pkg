@@ -171,10 +171,10 @@ If 'Y' or 'y' (you need this set to 'Y' for Outlook client email), then we canno
 We must apply the class values to the table data elements within the HTML. To do that
 we add the classes
 
-    -- td.right
-    -- td.left
-    -- tr.odd  (will be empty class if *p_odd_line_bg_color*  is null)
-    -- tr.even (will be empty class if *p_even_line_bg_color* is null)
+- td.right
+- td.left
+- tr.odd  (will be empty class if *p_odd_line_bg_color*  is null)
+- tr.even (will be empty class if *p_even_line_bg_color* is null)
 
 This makes it display mostly correct in the desktop version of Outlook. The web version
 of outlook also is mostly correct.
