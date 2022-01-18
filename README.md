@@ -157,18 +157,16 @@ that the function provides by default you are responsible for except for the fol
 - If *p_older_css_support* is 'Y', then **td.right**, **td.left**, **tr.odd**, and **tr.even** classes
     with colors you provided (or nothing) will be added to your style. 
 - Otherwise we optionaly add , 
-    - as many as needed "tr > td: nth-of-type(\_\_column number\_\_) { text-align:right; }"
-    - tr:nth-child(even)  { background-color: \_\_your provided color\_\_ }
-    - tr:nth-child(odd)   { background-color: \_\_your provided color\_\_ }
+    - as many as needed "tr > td:nth-of-type(\_\_column number\_\_) { text-align:right; }"
+    - tr:nth-child(even) { background-color: \_\_your provided color\_\_ }
+    - tr:nth-child(odd)  { background-color: \_\_your provided color\_\_ }
 
-You will notice I've stayed away from specifying actual fonts. Religious wars are started by mentioning
-a preference. This just lets the client set the font other than tweaks we do for style, weight and relative
-size. That said, I can make a case for a mono-spaced fault for tables; however, I recognize that as a programmer
-my font preferences are shaped by what I do and I'm in the minority.
+You will notice I've stayed away from specifying actual fonts. You are welcome to set them
+in your provided stylesheet.
 
 ### p_older_css_support
 
-If 'Y' or 'y' (you need this set to 'Y' for Outlook client email) then we cannot use the modern
+If 'Y' or 'y' (you need this set to 'Y' for Outlook client email), then we cannot use the modern
 "nth-of-type" mechanism for right-aligned columns or "nth-child" for alternating row colors. 
 We must apply the class values to the table data elements within the HTML. To do that
 we add the classes
@@ -299,7 +297,7 @@ FROM dual;
 | Example 1 Fancy Shenanigans |
 
 The function changed '\_x0020\_' to spaces in the column headers, thus dealing with one common problem
-of using DBMS_XMLGEN, but we did not try to fix the issue of having a comma in your column alias. Other non-alpha characters
-could be encoded as well. You are on your own for that.
+of using DBMS_XMLGEN, but we did not try to fix the issue of having a comma in your column alias. Other XML identifier
+"special" characters could be encoded as well. You are on your own for that.
 
 Overall this is a pretty fancy result for a bit of copy/pasting and tweaking of the provided style.
