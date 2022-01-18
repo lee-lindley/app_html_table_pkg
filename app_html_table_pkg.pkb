@@ -28,6 +28,9 @@ SOFTWARE.
         ,p_right_align_col_list     VARCHAR2 := NULL -- comma separated integers in string
         ,p_caption                  VARCHAR2 := NULL
         ,p_css_scoped_style         VARCHAR2 := NULL
+        ,p_older_css_support        VARCHAR2 := NULL -- 'Y' means your css cannot be too modern and we need to work harder
+        ,p_odd_line_bg_color        VARCHAR2 := NULL -- header row is 1
+        ,p_even_line_bg_color       VARCHAR2 := NULL
     )
     RETURN CLOB
     IS
@@ -54,23 +57,40 @@ th, td {
     border: 1px solid black; 
     padding:4px 6px;
 }
-!');
-        c_xsl              CONSTANT VARCHAR2(1024) := q'!<?xml version="1.0" encoding="ISO-8859-1"?>
+!')|| CASE WHEN p_older_css_support IN ('Y','y') THEN '
+td.right { text-align:right; }
+td.left { text-align:left; }
+'
+    ||'tr.odd {'
+    ||CASE WHEN p_odd_line_bg_color IS NOT NULL 
+        THEN ' background-color: '||p_odd_line_bg_color
+    END
+    ||' }
+tr.even {'
+    ||CASE WHEN p_even_line_bg_color IS NOT NULL 
+        THEN ' background-color: '||p_even_line_bg_color
+    END
+    ||' }
+'
+END
+;
+        v_xsl                       CLOB ;
+        c_xsl_default      CONSTANT VARCHAR2(1024) := q'!<?xml version="1.0" encoding="ISO-8859-1"?>
 <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
  <xsl:output method="html"/>
  <xsl:template match="/">
-    <tr>
+    <tr>    
      <xsl:for-each select="/ROWSET/ROW[1]/*">
       <th><xsl:value-of select="name()"/></th>
      </xsl:for-each>
     </tr>
     <xsl:for-each select="/ROWSET/*">
-    <tr>    
-     <xsl:for-each select="./*">
-      <td><xsl:value-of select="text()"/> </td>
-     </xsl:for-each>
-    </tr>
-   </xsl:for-each>
+     <tr>
+      <xsl:for-each select="./*">
+       <td><xsl:value-of select="text()"/> </td>
+      </xsl:for-each>
+     </tr>
+    </xsl:for-each>
  </xsl:template>
 </xsl:stylesheet>!';
 
@@ -79,6 +99,16 @@ th, td {
         e_null_object_ref       EXCEPTION;
         PRAGMA exception_init(e_null_object_ref, -30625);
     BEGIN
+        IF NVL(p_older_css_support,'x') NOT IN ('Y','y') THEN
+            IF p_even_line_bg_color IS NOT NULL THEN
+                v_css_style := v_css_style||'tr:nth-child(even) { background-color: '||p_even_line_bg_color||' }
+';
+            END IF;
+            IF p_odd_line_bg_color IS NOT NULL THEN
+                v_css_style := v_css_style||'tr:nth-child(odd) { background-color: '||p_odd_line_bg_color||' }
+';
+            END IF;
+        END IF;
 
         -- We separate out table from the rest of the body with a div and embed a scoped style for it
         v_clob := q'!<div id="plsql-table">
@@ -91,16 +121,62 @@ th, td {
             IF NOT REGEXP_LIKE(p_right_align_col_list, c_valid_re) THEN
                 raise_application_error(-20881, 'p_right_align_col_list invalid. Does not match '||c_valid_re);
             END IF;
-            FOR i IN 1..LENGTH(p_right_align_col_list) -- will be less than this
-            LOOP
-                v_col := REGEXP_SUBSTR(p_right_align_col_list, c_split_re, 1, i, '', 1);
-                EXIT WHEN v_col IS NULL;
-                -- just in case, we trim leading zeros
-                v_clob := v_clob||'tr > td:nth-of-type('||LTRIM(v_col, '0')||') {
+            IF p_older_css_support IN ('Y','y') THEN
+                -- the mod 2 = 0 goes odd thing is because it does not count the header row.
+                -- we want to match what the other code branch does
+                v_xsl := q'!<?xml version="1.0" encoding="ISO-8859-1"?>
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+ <xsl:output method="html"/>
+ <xsl:template match="/">
+   <tr>
+     <xsl:for-each select="/ROWSET/ROW[1]/*">
+      <th><xsl:value-of select="name()"/></th>
+     </xsl:for-each>
+   </tr>
+   <xsl:for-each select="/ROWSET/*">
+     <xsl:variable name="eoclass">
+      <xsl:choose>
+       <xsl:when test="position() mod 2 = 0">odd</xsl:when>
+       <xsl:otherwise>even</xsl:otherwise>
+      </xsl:choose>
+     </xsl:variable>
+     <tr class="{$eoclass}">
+      <xsl:for-each select="./*">
+       <xsl:variable name="rightleft">
+        <xsl:choose>!';    
+                FOR i IN 1..LENGTH(p_right_align_col_list) -- will be less than this
+                LOOP
+                    v_col := REGEXP_SUBSTR(p_right_align_col_list, c_split_re, 1, i, '', 1);
+                    EXIT WHEN v_col IS NULL;
+                    v_xsl := v_xsl||'
+         <xsl:when test="position() = '||LTRIM(v_col,'0')||'">right</xsl:when>';
+
+                END LOOP;
+                v_xsl := v_xsl||'
+         <xsl:otherwise>left</xsl:otherwise>
+        </xsl:choose>
+       </xsl:variable>
+       <td class="{$rightleft}"><xsl:value-of select="text()"/></td> 
+      </xsl:for-each>
+     </tr>
+   </xsl:for-each>
+ </xsl:template>
+</xsl:stylesheet>';
+DBMS_OUTPUT.put_line(v_xsl);
+            ELSE
+                -- we can put the logic in the css style for the browser
+                v_xsl := c_xsl_default;
+                FOR i IN 1..LENGTH(p_right_align_col_list) -- will be less than this
+                LOOP
+                    v_col := REGEXP_SUBSTR(p_right_align_col_list, c_split_re, 1, i, '', 1);
+                    EXIT WHEN v_col IS NULL;
+                    -- just in case, we trim leading zeros
+                    v_clob := v_clob||'tr > td:nth-of-type('||LTRIM(v_col, '0')||') {
     text-align:right;
 }
 ';
-            END LOOP;
+                END LOOP;
+            END IF;
 
         END IF;
 
@@ -117,7 +193,7 @@ th, td {
         DBMS_XMLGEN.setNullHandling(v_context,1);
         BEGIN
             v_clob := v_clob||REPLACE( -- replace munged spaces in column headers
-                DBMS_XMLGEN.GETXMLType(v_context, DBMS_XMLGEN.NONE).transform(XMLType(c_xsl)).getClobVal()
+                DBMS_XMLGEN.GETXMLType(v_context, DBMS_XMLGEN.NONE).transform(XMLType(v_xsl)).getClobVal()
                 ,'_x0020_', ' '
             );
             -- end the table and our div that included the local style
@@ -136,6 +212,9 @@ th, td {
         ,p_right_align_col_list     VARCHAR2 := NULL -- comma separated integers in string
         ,p_caption                  VARCHAR2 := NULL
         ,p_css_scoped_style         VARCHAR2 := NULL
+        ,p_older_css_support        VARCHAR2 := NULL -- 'Y' means your css cannot be too modern and we need to work harder
+        ,p_odd_line_bg_color        VARCHAR2 := NULL
+        ,p_even_line_bg_color       VARCHAR2 := NULL
     ) 
     RETURN CLOB
     IS
@@ -143,7 +222,15 @@ th, td {
         v_clob      CLOB;
     BEGIN
         OPEN v_src FOR p_sql;
-        v_clob := cursor2html(v_src, p_right_align_col_list, p_caption, p_css_scoped_style);
+        v_clob := cursor2html(
+                p_src                   => v_src
+                ,p_right_align_col_list => p_right_align_col_list
+                ,p_caption              => p_caption
+                ,p_css_scoped_style     => p_css_scoped_style
+                ,p_older_css_support    => p_older_css_support
+                ,p_odd_line_bg_color    => p_odd_line_bg_color
+                ,p_even_line_bg_color   => p_even_line_bg_color
+            );
         BEGIN
             CLOSE v_src;
             EXCEPTION WHEN invalid_cursor THEN NULL;

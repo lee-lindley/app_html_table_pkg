@@ -26,10 +26,13 @@ SOFTWARE.
 
 
     FUNCTION cursor2html(
-        p_src                           SYS_REFCURSOR
-        ,p_right_align_col_list         VARCHAR2 := NULL -- comma separated integers in string
-        ,p_caption                      VARCHAR2 := NULL
-        ,p_css_scoped_style             VARCHAR2 := NULL
+        p_src                       SYS_REFCURSOR
+        ,p_right_align_col_list     VARCHAR2 := NULL -- comma separated integers in string
+        ,p_caption                  VARCHAR2 := NULL
+        ,p_css_scoped_style         VARCHAR2 := NULL
+        ,p_older_css_support        VARCHAR2 := NULL -- 'Y' means your css cannot be too modern and we need to work harder
+        ,p_odd_line_bg_color        VARCHAR2 := NULL -- header row is 1
+        ,p_even_line_bg_color       VARCHAR2 := NULL
     ) RETURN CLOB
     ;
 
@@ -59,10 +62,13 @@ tr > td:nth-of-type(_col_) { text-align:right; }
 as needed per p_right_align_col_list
 */
     FUNCTION query2html(
-        p_sql                           CLOB
-        ,p_right_align_col_list         VARCHAR2 := NULL -- comma separated integers in string
-        ,p_caption                      VARCHAR2 := NULL
-        ,p_css_scoped_style             VARCHAR2 := NULL
+        p_sql                       CLOB
+        ,p_right_align_col_list     VARCHAR2 := NULL -- comma separated integers in string
+        ,p_caption                  VARCHAR2 := NULL
+        ,p_css_scoped_style         VARCHAR2 := NULL
+        ,p_older_css_support        VARCHAR2 := NULL -- 'Y' means your css cannot be too modern and we need to work harder
+        ,p_odd_line_bg_color        VARCHAR2 := NULL
+        ,p_even_line_bg_color       VARCHAR2 := NULL
     ) RETURN CLOB
     ;
 

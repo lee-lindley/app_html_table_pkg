@@ -38,7 +38,9 @@ in an HTML document.
 
 While here, it turned out to be not so difficult to provide a way for you to insert your own
 style choices for the table via CSS. You do not need to be a CSS guru to do it. The pattern
-from the examples will be enough for most.
+from the examples will be enough for most. That said, it got a bit harder when trying
+to support legacy HTML rendering engines like Outlook. Gmail web client is a bust. It seems to be style stupid.
+You get what you get and it does not right align.
 
 The common method for generating HTML markup tables from SQL queries in Oracle
 is to use DBMS_XMLGEN and XSLT conversions via XMLType. A search of the web will
@@ -61,17 +63,22 @@ can do so with a custom local scoped style that sets the alignment for particula
 
 ```sql
     FUNCTION query2html(
-        p_sql                           CLOB
-        ,p_right_align_col_list         VARCHAR2 := NULL -- comma separated integers in string
-        ,p_caption                      VARCHAR2 := NULL
-        ,p_css_scoped_style             VARCHAR2 := NULL
+        p_sql                       CLOB
+        ,p_right_align_col_list     VARCHAR2 := NULL -- comma separated integers in string
+        ,p_caption                  VARCHAR2 := NULL
+        ,p_css_scoped_style         VARCHAR2 := NULL
+        ,p_older_css_support        VARCHAR2 := NULL -- 'Y' means your css cannot be too modern and we need to work harder
+        ,p_odd_line_bg_color        VARCHAR2 := NULL -- header row is 1
+        ,p_even_line_bg_color       VARCHAR2 := NULL
+
     ) RETURN CLOB
     ;
 ```
 The returned CLOB using the default
-scoped style and no caption looks as follows;
-however, the two style elements below with "**text-align:right;**" are customized via
-a *p_right_align_col_list* value of '1, 4'.
+scoped style, modern css support, and no caption looks as follows;
+however, the two style elements at the end of the style section
+with "**text-align:right;**" are customized via
+a *p_right_align_col_list* value of '1, 4'. 
 
 	<div id="plsql-table">
 	<style type="text/css" scoped>
@@ -100,8 +107,24 @@ a *p_right_align_col_list* value of '1, 4'.
 	}
 	</style>
 	<table>
-	<tr><th>Emp ID</th><th>Fname</th><th>Date,Hire,YYYYMMDD</th><th>Salary</th></tr>
-	<tr><td>102</td><td>De Haan, Lex</td><td>20010113</td><td>$17,000.00</td></tr>
+    <tr>
+        <th>Emp ID</th>
+        <th>Full Name</th>
+        <th>Date_x002C_Hire</th>
+        <th>Salary</th>
+    </tr>
+    <tr>
+      <td>000999</td>
+      <td>  Baggins, Bilbo &quot;badboy&quot; </td>
+      <td>12/31/1999</td>
+      <td>     $123.45</td>
+    </tr>
+    <tr>
+      <td> 000206</td>
+      <td>Gietz, William</td>
+      <td>06/07/2002</td>
+      <td>   $8,300.00</td>
+    </tr>
     ...
 	</table></div>
 
@@ -111,15 +134,16 @@ A string containing the SQL statement to execute.
 
 ### p_right_align_col_list
 
-A string that contains a comma separated list of column numbers. It must be NULL or 
-match the regular expression '^(\s*\d+\s*(,|$))+$'
+A string that contains a comma separated list of column numbers (like '1, 4'). 
+It must be NULL or match the regular expression '^(\s*\d+\s*(,|$))+$'
 else an error will be raised. This produces the
 
     tr > td:nth-of-type(__colnum__) {
 	    text-align:right;
 	}
 
-elements in the local style where \_\_colnum\_\_ is the column number.
+elements in the local style where \_\_colnum\_\_ is the column number; however,
+see below for what happens with *p_older_css_support* is 'Y'.
 
 ### p_caption
 
@@ -128,12 +152,56 @@ If provided, will be wrapped with \<caption\> \</caption\> and inserted followin
 ### p_css_scoped_style
 
 Do not include the \<style\> \</style\> elements as the function will add those. Everything else
-that the function provides by default you are responsible for.
+that the function provides by default you are responsible for except for the following.
+
+- If *p_older_css_support* is 'Y', then **td.right**, **td.left**, **tr.odd**, and **tr.even** classes
+    with colors you provided (or nothing) will be added to your style. 
+- Otherwise we optionaly add , 
+    - as many as needed "tr > td: nth-of-type(\_\_column number\_\_) { text-align:right; }"
+    - tr:nth-child(even)  { background-color: \_\_your provided color\_\_ }
+    - tr:nth-child(odd)   { background-color: \_\_your provided color\_\_ }
 
 You will notice I've stayed away from specifying actual fonts. Religious wars are started by mentioning
 a preference. This just lets the client set the font other than tweaks we do for style, weight and relative
 size. That said, I can make a case for a mono-spaced fault for tables; however, I recognize that as a programmer
 my font preferences are shaped by what I do and I'm in the minority.
+
+### p_older_css_support
+
+If 'Y' or 'y' (you need this set to 'Y' for Outlook client email) then we cannot use the modern
+"nth-of-type" mechanism for right-aligned columns or "nth-child" for alternating row colors. 
+We must apply the class values to the table data elements within the HTML. To do that
+we add the classes
+
+    -- td.right
+    -- td.left
+    -- tr.odd  (will be empty class if *p_odd_line_bg_color*  is null)
+    -- tr.even (will be empty class if *p_even_line_bg_color* is null)
+
+This makes it display mostly correct in the desktop version of Outlook. The web version
+of outlook also is mostly correct.
+
+Even with this, you still will not see it correctly in Gmail web client which seems
+particularly brutal about ignoring scoped style settings. If you company bought into the
+Google cloud spiel, good luck.
+
+I'm not sure about others.
+
+### p_odd_line_bg_color
+
+If provided, one of the these two classes will be added to the CSS style:
+
+- tr:nth-child(odd)   { background-color: \_\_your provided color\_\_ }
+- tr.odd { background-color: \_\_your provided color\_\_ }
+
+Note that we count the header row for determining odd or even.
+
+### p_even_line_bg_color
+
+If provided, one of the these two classes will be added to the CSS style:
+
+- tr:nth-child(even)   { background-color: \_\_your provided color\_\_ }
+- tr.even { background-color: \_\_your provided color\_\_ }
 
 ## cursor2html
 
@@ -174,13 +242,14 @@ FROM dual;
 All kinds of shenanigans going on here. 
 
 - We set *p_right_align_col_list* to '1, 4' to get the first and fourth columns right justified.
-- We add a caption
+- We add a caption.
+- We make odd numbered rows (starting with the header row, but the color for that is overriden) **AliceBlue**.
+- We make even numbered rows **LightGrey**.
 - We provide a custom style that starts with the default one in the package and tweaks it.
     - Make the caption bold/italic instead of just italic.
-    - Set the background color for the column headers to LightGrey.
-    - Every odd numbered row gets a background color of AliceBlue
+    - Set the background color for the column headers to **Orange**.
 
-Pretty fancy! But given that you have the default CSS code from the package
+Pretty fancy if a big garish and ugly! But given that you have the default CSS code from the package
 plus this example, it is not that
 much of a stretch to make your table look the way you want.
 
@@ -197,6 +266,9 @@ SELECT app_html_table_pkg.query2html(p_sql => q'[
         ORDER BY "Emp ID" desc]'
                                     ,p_caption              => 'Poorly Paid People'
                                     ,p_right_align_col_list => '1,4'
+                                    --,p_older_css_support => 'Y'
+                                    ,p_odd_line_bg_color    => 'AliceBlue'
+                                    ,p_even_line_bg_color   => 'LightGrey'
                                     ,p_css_scoped_style     => q'!
 table {
     border: 1px solid black; 
@@ -211,13 +283,12 @@ caption {
 }
 th {
     text-align:left;
-    background-color: LightGrey
+    background-color: Orange
 }
 th, td {
     border: 1px solid black; 
     padding:4px 6px;
 }
-tr:nth-child(odd) { background-color: AliceBlue }
 !'
     )
 FROM dual;
