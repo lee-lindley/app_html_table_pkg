@@ -30,7 +30,7 @@ Clone this repository or download it as a [zip](https://github.com/lee-lindley/a
 Present HTML Table markup from an Oracle query while right aligning numeric data in the cells.
 This is not a full HTML document, but a section that you can include in a larger HTML body. For example:
 
-    SELECT app_html_table_pkg.get_clob(q'!SELECT * FROM hr.departments!')
+    SELECT app_html_table_pkg.query2html(q'!SELECT * FROM hr.departments!')
     FROM dual;
 
 The resulting markup text is enclosed with a \<div\> tag and can be added to an HTML email or otherwise included
@@ -39,8 +39,8 @@ in an HTML document.
 While here, it turned out to be not so difficult to provide a way for you to insert your own
 style choices for the table via CSS. You do not need to be a CSS guru to do it. The pattern
 from the examples will be enough for most. That said, it got a bit harder when trying
-to support legacy HTML rendering engines like Outlook. Gmail web client is a bust. It seems to be style stupid.
-You get what you get and it does not right align.
+to support legacy HTML rendering engines like Outlook. Gmail web client is style stupid.
+There is a special option to output dumbed down HTML for Gmail.
 
 The common method for generating HTML markup tables from SQL queries in Oracle
 is to use DBMS_XMLGEN and XSLT conversions via XMLType. A search of the web will
@@ -67,7 +67,9 @@ can do so with a custom local scoped style that sets the alignment for particula
         ,p_right_align_col_list     VARCHAR2 := NULL -- comma separated integers in string
         ,p_caption                  VARCHAR2 := NULL
         ,p_css_scoped_style         VARCHAR2 := NULL
-        ,p_older_css_support        VARCHAR2 := NULL -- 'Y' means your css cannot be too modern and we need to work harder
+        ,p_older_css_support        VARCHAR2 := NULL
+        -- 'G' means nuclear option for gmail, 'Y' means your css cannot be too modern and we need to work harder
+        -- like for Outlook clients.
         ,p_odd_line_bg_color        VARCHAR2 := NULL -- header row is 1
         ,p_even_line_bg_color       VARCHAR2 := NULL
 
@@ -180,10 +182,16 @@ This makes it display mostly correct in the desktop version of Outlook. The web 
 of outlook also is mostly correct.
 
 Even with this, you still will not see it correctly in Gmail web client which seems
-particularly brutal about ignoring scoped style settings. If you company bought into the
-Google cloud spiel, good luck.
+particularly brutal about ignoring scoped style settings. 
+
+If *p_older_css_support* is set to 'G' or 'g', then the HTML has the style requirements
+directly in the \<tr\> and \<td\> elements without refering to CSS style names.
 
 I'm not sure about others.
+
+The code is now so ugly supporting all of these variants that I'm tempted to eliminate all the
+fancy style support and just make the dumbed down HTML be the default. Setting the flag to 'G' gives
+HTML most likely to be rendered correctly in any client.
 
 ### p_odd_line_bg_color
 

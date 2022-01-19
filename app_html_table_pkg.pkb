@@ -28,7 +28,9 @@ SOFTWARE.
         ,p_right_align_col_list     VARCHAR2 := NULL -- comma separated integers in string
         ,p_caption                  VARCHAR2 := NULL
         ,p_css_scoped_style         VARCHAR2 := NULL
-        ,p_older_css_support        VARCHAR2 := NULL -- 'Y' means your css cannot be too modern and we need to work harder
+        ,p_older_css_support        VARCHAR2 := NULL 
+        -- 'G' means nuclear option for gmail, 'Y' means your css cannot be too modern and we need to work harder
+        -- like for Outlook clients.
         ,p_odd_line_bg_color        VARCHAR2 := NULL -- header row is 1
         ,p_even_line_bg_color       VARCHAR2 := NULL
     )
@@ -99,7 +101,8 @@ END
         e_null_object_ref       EXCEPTION;
         PRAGMA exception_init(e_null_object_ref, -30625);
     BEGIN
-        IF NVL(p_older_css_support,'x') NOT IN ('Y','y') THEN
+
+        IF NVL(p_older_css_support,'x') NOT IN ('Y','y', 'G','g') THEN
             IF p_even_line_bg_color IS NOT NULL THEN
                 v_css_style := v_css_style||'tr:nth-child(even) { background-color: '||p_even_line_bg_color||' }
 ';
@@ -117,8 +120,13 @@ END
             ||v_css_style
             ;
 
-        IF p_right_align_col_list IS NOT NULL THEN
-            IF NOT REGEXP_LIKE(p_right_align_col_list, c_valid_re) THEN
+        IF p_right_align_col_list IS NOT NULL 
+                OR (p_older_css_support IN ('G','g') 
+                    AND (p_even_line_bg_color IS NOT NULL OR p_odd_line_bg_color IS NOT NULL)
+                )
+            THEN
+
+            IF p_right_align_col_list IS NOT NULL AND NOT REGEXP_LIKE(p_right_align_col_list, c_valid_re) THEN
                 raise_application_error(-20881, 'p_right_align_col_list invalid. Does not match '||c_valid_re);
             END IF;
             IF p_older_css_support IN ('Y','y') THEN
@@ -133,7 +141,9 @@ END
       <th><xsl:value-of select="name()"/></th>
      </xsl:for-each>
    </tr>
-   <xsl:for-each select="/ROWSET/*">
+   <xsl:for-each select="/ROWSET/*">!';
+                IF p_right_align_col_list IS NOT NULL THEN
+                    v_xsl := v_xsl||q'!
      <xsl:variable name="eoclass">
       <xsl:choose>
        <xsl:when test="position() mod 2 = 0">odd</xsl:when>
@@ -144,40 +154,114 @@ END
       <xsl:for-each select="./*">
        <xsl:variable name="rightleft">
         <xsl:choose>!';    
-                FOR i IN 1..LENGTH(p_right_align_col_list) -- will be less than this
-                LOOP
-                    v_col := REGEXP_SUBSTR(p_right_align_col_list, c_split_re, 1, i, '', 1);
-                    EXIT WHEN v_col IS NULL;
-                    v_xsl := v_xsl||'
+                    FOR i IN 1..LENGTH(p_right_align_col_list) -- will be less than this
+                    LOOP
+                        v_col := REGEXP_SUBSTR(p_right_align_col_list, c_split_re, 1, i, '', 1);
+                        EXIT WHEN v_col IS NULL;
+                        v_xsl := v_xsl||'
          <xsl:when test="position() = '||LTRIM(v_col,'0')||'">right</xsl:when>';
 
-                END LOOP;
-                v_xsl := v_xsl||'
+                    END LOOP;
+                    v_xsl := v_xsl||q'!
          <xsl:otherwise>left</xsl:otherwise>
         </xsl:choose>
        </xsl:variable>
-       <td class="{$rightleft}"><xsl:value-of select="text()"/></td> 
+       <td class="{$rightleft}"><xsl:value-of select="text()"/></td>!';
+                ELSE
+                    v_xsl := v_xsl||q'!
+       <td><xsl:value-of select="text()"/></td>!';
+                END IF;
+                v_xsl := v_xsl||q'!
       </xsl:for-each>
      </tr>
    </xsl:for-each>
  </xsl:template>
-</xsl:stylesheet>';
-DBMS_OUTPUT.put_line(v_xsl);
-            ELSE
+</xsl:stylesheet>!';
+--DBMS_OUTPUT.put_line(v_xsl);
+            ELSIF p_older_css_support IN ('G','g') THEN
+
+                -- the mod 2 = 0 goes odd thing is because it does not count the header row.
+                -- we want to match what the other code branch does
+                v_xsl := q'!<?xml version="1.0" encoding="ISO-8859-1"?>
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+ <xsl:output method="html"/>
+ <xsl:template match="/">
+   <tr>
+     <xsl:for-each select="/ROWSET/ROW[1]/*">
+      <th><xsl:value-of select="name()"/></th>
+     </xsl:for-each>
+   </tr>
+   <xsl:for-each select="/ROWSET/*">!'
+                ;
+                IF p_even_line_bg_color IS NOT NULL OR p_odd_line_bg_color IS NOT NULL THEN
+                    v_xsl := v_xsl||q'!
+     <xsl:variable name="backgroundcolor">
+      <xsl:choose>!';
+                    IF p_odd_line_bg_color IS NOT NULL THEN
+                        v_xsl := v_xsl||q'!
+       <xsl:when test="position() mod 2 = 0">!'||p_odd_line_bg_color||q'!</xsl:when>!'
+                        ;
+                    END IF;
+                    IF p_even_line_bg_color IS NOT NULL THEN
+                        v_xsl := v_xsl||q'!
+       <xsl:when test="position() mod 2 = 1">!'||p_even_line_bg_color||q'!</xsl:when>!'
+                        ;
+                    END IF;
+                    v_xsl := v_xsl||q'!
+      </xsl:choose>
+     </xsl:variable>
+     <tr style="background-color: {$backgroundcolor};">!'
+                    ;
+                ELSE
+                    v_xsl := v_xsl||q'!
+     <tr>!';
+                END IF;
+                v_xsl := v_xsl||q'!
+      <xsl:for-each select="./*">!';
+                
+                IF p_right_align_col_list IS NOT NULL THEN
+                    v_xsl := v_xsl||q'!
+       <xsl:variable name="rightleft">
+        <xsl:choose>!';    
+                    FOR i IN 1..LENGTH(p_right_align_col_list) -- will be less than this
+                    LOOP
+                        v_col := REGEXP_SUBSTR(p_right_align_col_list, c_split_re, 1, i, '', 1);
+                        EXIT WHEN v_col IS NULL;
+                        v_xsl := v_xsl||'
+         <xsl:when test="position() = '||LTRIM(v_col,'0')||'">right</xsl:when>';
+                    END LOOP;
+                    v_xsl := v_xsl||q'!
+         <xsl:otherwise>left</xsl:otherwise>
+        </xsl:choose>
+       </xsl:variable>
+       <td style="text-align: {$rightleft};"><xsl:value-of select="text()"/></td>!';
+                ELSE
+                    v_xsl := v_xsl||q'!
+       <td><xsl:value-of select="text()"/></td>!';
+                END IF;
+                v_xsl := v_xsl||q'!
+      </xsl:for-each>
+     </tr>
+   </xsl:for-each>
+ </xsl:template>
+</xsl:stylesheet>!';
+--DBMS_OUTPUT.put_line(v_xsl);
+            ELSE -- modern CSS
                 -- we can put the logic in the css style for the browser
                 v_xsl := c_xsl_default;
-                FOR i IN 1..LENGTH(p_right_align_col_list) -- will be less than this
-                LOOP
-                    v_col := REGEXP_SUBSTR(p_right_align_col_list, c_split_re, 1, i, '', 1);
-                    EXIT WHEN v_col IS NULL;
-                    -- just in case, we trim leading zeros
-                    v_clob := v_clob||'tr > td:nth-of-type('||LTRIM(v_col, '0')||') {
+                    FOR i IN 1..LENGTH(p_right_align_col_list) -- will be less than this
+                    LOOP
+                        v_col := REGEXP_SUBSTR(p_right_align_col_list, c_split_re, 1, i, '', 1);
+                        EXIT WHEN v_col IS NULL;
+                        -- just in case, we trim leading zeros
+                        v_clob := v_clob||'tr > td:nth-of-type('||LTRIM(v_col, '0')||') {
     text-align:right;
 }
 ';
-                END LOOP;
+                    END LOOP;
             END IF;
-
+        ELSE
+                v_xsl := c_xsl_default;
         END IF;
 
         -- end our local style and start the html table section
@@ -188,6 +272,8 @@ DBMS_OUTPUT.put_line(v_xsl);
             v_clob := v_clob||'<caption>'||DBMS_XMLGEN.CONVERT(p_caption)||'</caption>
 '; 
         END IF;
+--DBMS_OUTPUT.put_line('v_xsl:'||v_xsl);
+--DBMS_OUTPUT.put_line('v_clob:'||v_clob);
 
         v_context := DBMS_XMLGEN.newcontext(p_src);
         DBMS_XMLGEN.setNullHandling(v_context,1);
@@ -212,7 +298,7 @@ DBMS_OUTPUT.put_line(v_xsl);
         ,p_right_align_col_list     VARCHAR2 := NULL -- comma separated integers in string
         ,p_caption                  VARCHAR2 := NULL
         ,p_css_scoped_style         VARCHAR2 := NULL
-        ,p_older_css_support        VARCHAR2 := NULL -- 'Y' means your css cannot be too modern and we need to work harder
+        ,p_older_css_support        VARCHAR2 := NULL -- 'Y' 'G' or null/'N'
         ,p_odd_line_bg_color        VARCHAR2 := NULL
         ,p_even_line_bg_color       VARCHAR2 := NULL
     ) 

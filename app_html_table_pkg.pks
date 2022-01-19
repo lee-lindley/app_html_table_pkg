@@ -30,7 +30,9 @@ SOFTWARE.
         ,p_right_align_col_list     VARCHAR2 := NULL -- comma separated integers in string
         ,p_caption                  VARCHAR2 := NULL
         ,p_css_scoped_style         VARCHAR2 := NULL
-        ,p_older_css_support        VARCHAR2 := NULL -- 'Y' means your css cannot be too modern and we need to work harder
+        ,p_older_css_support        VARCHAR2 := NULL 
+        -- 'G' means nuclear option for gmail, 'Y' means your css cannot be too modern and we need to work harder
+        -- like for Outlook clients.
         ,p_odd_line_bg_color        VARCHAR2 := NULL -- header row is 1
         ,p_even_line_bg_color       VARCHAR2 := NULL
     ) RETURN CLOB
@@ -66,7 +68,7 @@ as needed per p_right_align_col_list
         ,p_right_align_col_list     VARCHAR2 := NULL -- comma separated integers in string
         ,p_caption                  VARCHAR2 := NULL
         ,p_css_scoped_style         VARCHAR2 := NULL
-        ,p_older_css_support        VARCHAR2 := NULL -- 'Y' means your css cannot be too modern and we need to work harder
+        ,p_older_css_support        VARCHAR2 := NULL 
         ,p_odd_line_bg_color        VARCHAR2 := NULL
         ,p_even_line_bg_color       VARCHAR2 := NULL
     ) RETURN CLOB
