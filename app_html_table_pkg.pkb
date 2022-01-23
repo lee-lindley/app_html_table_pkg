@@ -59,22 +59,23 @@ th, td {
     border: 1px solid black; 
     padding:4px 6px;
 }
-!')|| CASE WHEN p_older_css_support IN ('Y','y') THEN '
+!')
+|| CASE WHEN p_older_css_support IN ('Y','y') THEN '
 td.right { text-align:right; }
 td.left { text-align:left; }
 '
-    ||'tr.odd {'
-    ||CASE WHEN p_odd_line_bg_color IS NOT NULL 
-        THEN ' background-color: '||p_odd_line_bg_color
-    END
-    ||' }
+        ||'tr.odd {'
+        ||CASE WHEN p_odd_line_bg_color IS NOT NULL 
+            THEN ' background-color: '||p_odd_line_bg_color
+          END
+        ||' }
 tr.even {'
-    ||CASE WHEN p_even_line_bg_color IS NOT NULL 
-        THEN ' background-color: '||p_even_line_bg_color
-    END
-    ||' }
+        ||CASE WHEN p_even_line_bg_color IS NOT NULL 
+            THEN ' background-color: '||p_even_line_bg_color
+          END
+        ||' }
 '
-END
+    END
 ;
         v_xsl                       CLOB ;
         c_xsl_default      CONSTANT VARCHAR2(1024) := q'!<?xml version="1.0" encoding="ISO-8859-1"?>
@@ -102,6 +103,7 @@ END
         PRAGMA exception_init(e_null_object_ref, -30625);
     BEGIN
 
+        -- case of good CSS support and we have alternating row color requirement
         IF NVL(p_older_css_support,'x') NOT IN ('Y','y', 'G','g') THEN
             IF p_even_line_bg_color IS NOT NULL THEN
                 v_css_style := v_css_style||'tr:nth-child(even) { background-color: '||p_even_line_bg_color||' }
@@ -120,6 +122,7 @@ END
             ||v_css_style
             ;
 
+        -- case of needing to put code into the XSLT transformation
         IF p_right_align_col_list IS NOT NULL 
                 OR (p_older_css_support IN ('G','g') 
                     AND (p_even_line_bg_color IS NOT NULL OR p_odd_line_bg_color IS NOT NULL)
@@ -129,7 +132,7 @@ END
             IF p_right_align_col_list IS NOT NULL AND NOT REGEXP_LIKE(p_right_align_col_list, c_valid_re) THEN
                 raise_application_error(-20881, 'p_right_align_col_list invalid. Does not match '||c_valid_re);
             END IF;
-            IF p_older_css_support IN ('Y','y') THEN
+            IF p_older_css_support IN ('Y','y') THEN -- the midlevel case. Some CSS style support
                 -- the mod 2 = 0 goes odd thing is because it does not count the header row.
                 -- we want to match what the other code branch does
                 v_xsl := q'!<?xml version="1.0" encoding="ISO-8859-1"?>
@@ -178,7 +181,7 @@ END
  </xsl:template>
 </xsl:stylesheet>!';
 --DBMS_OUTPUT.put_line(v_xsl);
-            ELSIF p_older_css_support IN ('G','g') THEN
+            ELSIF p_older_css_support IN ('G','g') THEN -- nuclear option. everything in the HTML
 
                 -- the mod 2 = 0 goes odd thing is because it does not count the header row.
                 -- we want to match what the other code branch does
@@ -246,7 +249,9 @@ END
  </xsl:template>
 </xsl:stylesheet>!';
 --DBMS_OUTPUT.put_line(v_xsl);
+
             ELSE -- modern CSS
+
                 -- we can put the logic in the css style for the browser
                 v_xsl := c_xsl_default;
                     FOR i IN 1..LENGTH(p_right_align_col_list) -- will be less than this

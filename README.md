@@ -19,7 +19,7 @@ Clone this repository or download it as a [zip](https://github.com/lee-lindley/a
 
 `git clone https://github.com/lee-lindley/app_html_table_pkg.git`
 
-## install.sql
+### install.sql
 
 *install.sql* is a simple compile of the package specification and body.
 
@@ -36,19 +36,18 @@ This is not a full HTML document, but a section that you can include in a larger
 The resulting markup text is enclosed with a \<div\> tag and can be added to an HTML email or otherwise included
 in an HTML document.
 
-While here, it turned out to be not so difficult to provide a way for you to insert your own
-style choices for the table via CSS. You do not need to be a CSS guru to do it. The pattern
-from the examples will be enough for most. That said, it got a bit harder when trying
-to support legacy HTML rendering engines like Outlook. Gmail web client is style stupid.
-There is a special option to output dumbed down HTML for Gmail.
+### Underlying Method
 
 The common method for generating HTML markup tables from SQL queries in Oracle
-is to use DBMS_XMLGEN and XSLT conversions via XMLType. A search of the web will
+is to use *DBMS_XMLGEN* and *XSLT* conversions via *XMLType*. A search of the web will
 turn up multiple demonstrations of the technique. It works reasonably well, but there are
 some gotchas like column headers with spaces get munged to \_x0020\_ and all data is left justified
 in the cells.
 
-A big drawback is that we often want to right justify numeric data. In plain text output we can use LPAD(TO_CHAR... 
+### Right Justify Numbers
+
+We often want to right justify numeric data so that it lines up at the decimal point. 
+In plain text output we can use LPAD(TO_CHAR... 
 (or just TO_CHAR) to simulate right justification, 
 but HTML does not respect spaces unless we use **pre**, and even then I'm not sure
 we can count on the font to not mess up our alignment. I'm not an HTML or XSLT expert, but I do not think
@@ -56,6 +55,14 @@ preserving white space helps.
 
 We need to use a right alignment style modifier on the table data tag when we want numbers right aligned. We 
 can do so with a custom local scoped style that sets the alignment for particular columns.
+
+### Override HTML Style
+
+While here, it turned out to be not so difficult to provide a way for you to insert your own
+style choices for the table via CSS. You do not need to be a CSS guru to do it. The pattern
+from the examples will be enough for most. That said, it got a bit harder when trying
+to support legacy HTML rendering engines like Outlook. Worse, Gmail web client is style stupid.
+There is a special option to output dumbed down HTML for Gmail.
 
 # Manual Page
 
@@ -76,6 +83,9 @@ can do so with a custom local scoped style that sets the alignment for particula
     ) RETURN CLOB
     ;
 ```
+
+### Simple Output
+
 The returned CLOB using the default
 scoped style, modern css support, and no caption looks as follows;
 however, the two style elements at the end of the style section
@@ -189,9 +199,9 @@ directly in the \<tr\> and \<td\> elements without refering to CSS style names.
 
 I'm not sure about others.
 
+Setting the flag to 'G' gives HTML most likely to be rendered correctly in any client.
 The code is now so ugly supporting all of these variants that I'm tempted to eliminate all the
-fancy style support and just make the dumbed down HTML be the default. Setting the flag to 'G' gives
-HTML most likely to be rendered correctly in any client.
+fancy style support and just make the dumbed down HTML be the default. 
 
 ### p_odd_line_bg_color
 
@@ -217,6 +227,11 @@ If provided, one of the these two classes will be added to the CSS style:
         ,p_right_align_col_list         VARCHAR2 := NULL -- comma separated integers in string
         ,p_caption                      VARCHAR2 := NULL
         ,p_css_scoped_style             VARCHAR2 := NULL
+        ,p_older_css_support            VARCHAR2 := NULL 
+        -- 'G' means nuclear option for gmail, 'Y' means your css cannot be too modern and we need to work harder
+        -- like for Outlook clients.
+        ,p_odd_line_bg_color            VARCHAR2 := NULL -- header row is 1
+        ,p_even_line_bg_color           VARCHAR2 := NULL
     ) RETURN CLOB
     ;
 ```
