@@ -28,7 +28,9 @@ Clone this repository or download it as a [zip](https://github.com/lee-lindley/a
 # Use Case
 
 Present HTML Table markup from an Oracle query while right aligning numeric data in the cells.
-This is not a full HTML document, but a section that you can include in a larger HTML body. For example:
+This is not a full HTML document, but a section that you can include in a larger HTML body. 
+
+Example \<table\> markup:
 
     SELECT app_html_table_pkg.query2html(q'!SELECT * FROM hr.departments!')
     FROM dual;
@@ -49,7 +51,7 @@ in the cells.
 We often want to right justify numeric data so that it lines up at the decimal point. 
 In plain text output we can use LPAD(TO_CHAR... 
 (or just TO_CHAR) to simulate right justification, 
-but HTML does not respect spaces unless we use **pre**, and even then I'm not sure
+but HTML does not respect spaces unless we use **\<pre\>**, and even then I'm not sure
 we can count on the font to not mess up our alignment. I'm not an HTML or XSLT expert, but I do not think
 preserving white space helps.
 
