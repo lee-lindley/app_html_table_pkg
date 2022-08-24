@@ -165,18 +165,38 @@ If provided, will be wrapped with \<caption\> \</caption\> and inserted followin
 
 ### p_css_scoped_style
 
-Do not include the \<style\> \</style\> elements as the function will add those. Everything else
-that the function provides by default you are responsible for except for the following.
+Do not include the \<style\> \</style\> elements as the function will add those. This is the section of
+the default that is provided by the function. You must provide a version of this tailored to your needs.
+
+	table {
+	    border: 1px solid black; 
+	    border-spacing: 0; 
+	    border-collapse: collapse;
+	}
+	caption {
+	    font-style: italic;
+	    font-size: larger;
+	    margin-bottom: 0.5em;
+	}
+	th {
+	    text-align:left;
+	}
+	th, td {
+	    border: 1px solid black; 
+	    padding:4px 6px;
+	}
+
+Your contribution will replace that portion of the style provided by the function as default. In addition
 
 - If *p_older_css_support* is 'Y', then **td.right**, **td.left**, **tr.odd**, and **tr.even** classes
-    with colors you provided (or nothing) will be added to your style. 
+    with colors you provided (or nothing) in the optional parameters will be added to your style. 
 - Otherwise we optionaly add , 
     - as many as needed "tr > td:nth-of-type(\_\_column number\_\_) { text-align:right; }"
     - tr:nth-child(even) { background-color: \_\_your provided color\_\_ }
     - tr:nth-child(odd)  { background-color: \_\_your provided color\_\_ }
 
 You will notice I've stayed away from specifying actual fonts. You are welcome to set them
-in your provided stylesheet.
+in this text.
 
 ### p_older_css_support
 
